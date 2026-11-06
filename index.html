@@ -103,8 +103,7 @@ body{word-break:keep-all}
         <button data-v="ai" aria-pressed="false">AI</button>
       </div>
       <div class="seg" role="group" aria-label="보기" id="fView">
-        <button data-v="line" aria-pressed="true">한 줄</button>
-        <button data-v="lanes" aria-pressed="false">학회별</button>
+        <button data-v="lanes" aria-pressed="true">학회별</button>
         <button data-v="list" aria-pressed="false">목록</button>
       </div>
       <div class="seg" role="group" aria-label="기간" id="fRange">
@@ -240,7 +239,7 @@ function hm(s){ return s.length>10 ? " "+s.slice(11,16) : ""; }
 function ddText(n){ return n===0?"D-Day": n>0?`D-${n}`:`D+${-n}`; }
 const W = ["일","월","화","수","목","금","토"];
 
-const state = { field:"all", months:6, view:"line" };
+const state = { field:"all", months:6, view:"lanes" };
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const color = f => css(f==="security"?"--crypto":f==="ai"?"--ai":"--etc");
 
@@ -255,92 +254,6 @@ function renderNext(today){
   }).join("") : `<div class="item"><div class="nm">남은 마감 없음</div></div>`;
   const tba = TBA.filter(t=>state.field==="all"||t.f===state.field);
   document.getElementById("tba").innerHTML = tba.length ? "일정 미발표 · " + tba.map(t=>`<b>${t.c}</b>`).join(", ") : "";
-}
-
-function renderLine(today){
-  const svg = document.getElementById("tl");
-  const scroller = document.getElementById("scroller");
-  const start = today - 10*DAY;
-  const end = today + state.months*30.4*DAY;
-  const ppm = {3:340,6:240,12:150}[state.months]||240;
-  const minW = Math.max(scroller.clientWidth, state.months*ppm);
-  const PAD = 70, H = 360, Y = 178;
-  const x = t => PAD + (t-start)/(end-start)*(minW-2*PAD);
-  svg.setAttribute("width", minW); svg.setAttribute("height", H);
-  svg.setAttribute("viewBox", `0 0 ${minW} ${H}`);
-
-  let g = "";
-  // 월 눈금
-  const d0 = new Date(start); let m = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth()+1, 1);
-  while(m < end){ const xm=x(m); const dm=new Date(m);
-    g += `<line x1="${xm}" y1="${Y-5}" x2="${xm}" y2="${Y+5}" stroke="${css("--line")}" stroke-width="1.5"/>`;
-    g += `<text class="month" x="${xm}" y="${H-6}" text-anchor="middle">${dm.getUTCMonth()===0?dm.getUTCFullYear()+"년 ":""}${dm.getUTCMonth()+1}월</text>`;
-    m = Date.UTC(dm.getUTCFullYear(), dm.getUTCMonth()+1, 1); }
-  // 기준선
-  g += `<line x1="${PAD-24}" y1="${Y}" x2="${minW-PAD+24}" y2="${Y}" stroke="${css("--fg")}" stroke-opacity=".75" stroke-width="2.2" stroke-linecap="round"/>`;
-  // 오늘
-  const xt = x(today);
-  g += `<line x1="${xt}" y1="${Y-150}" x2="${xt}" y2="${H-26}" stroke="${css("--today")}" stroke-width="1.5" stroke-dasharray="3 3"/>`;
-  g += `<rect x="${xt-18}" y="${Y-168}" width="36" height="18" rx="9" fill="${css("--today")}"/><text x="${xt}" y="${Y-155}" text-anchor="middle" style="font-size:11px;font-weight:700;fill:#fff">오늘</text>`;
-
-  g += '<!--STEMS-->';
-  // 같은 날 항목은 하나로 묶고, 실제 글자 폭을 재서 위/아래 3줄 안에 겹치지 않게 배치
-  const raw = visible().filter(e=>dayOf(e.e||e.d)>=start && dayOf(e.d)<=end)
-                       .sort((a,b)=>dayOf(a.d)-dayOf(b.d));
-  const groups = [];
-  raw.forEach(e=>{ const last=groups[groups.length-1];
-    if(last && !e.e && !last.items[0].e && last.items[0].d.slice(0,10)===e.d.slice(0,10)) last.items.push(e);
-    else groups.push({items:[e]}); });
-  const ctx = document.createElement("canvas").getContext("2d");
-  const meas = (t,font)=>{ ctx.font=font; return ctx.measureText(t).width; };
-  const FN = '13px "Pretendard Variable", Pretendard, sans-serif', FD = '650 15px "Pretendard Variable", Pretendard, sans-serif';
-  const short = e => `${e.c.replace(/ 20\d\d$/,"")} ${e.s}`;
-  const LANES=3, ends={up:Array(LANES).fill(-1e9), down:Array(LANES).fill(-1e9)};
-  let flip=0;
-  groups.forEach(G=>{
-    const e=G.items[0]; G.cx=x(dayOf(e.d));
-    G.names=G.items.map(short);
-    const n=(dayOf(e.d)-today)/DAY;
-    G.dd = dayOf(e.e||e.d)<today ? "" : (e.k==="event" && n<0 ? "진행 중" : ddText(n));
-    G.date = fmt(e.d)+(e.e?"–"+fmt(e.e):"");
-    G.w = Math.max(...G.names.map(t=>meas(t,FN)), meas(G.date,FD)+meas(G.dd,FN)+6) + 14;
-    const prefer=(flip++%2)?"down":"up", order=prefer==="up"?["up","down"]:["down","up"];
-    let best=null;
-    for(let l=0;l<LANES && !best;l++) for(const sd of order){ if(ends[sd][l] < G.cx-G.w/2){ best=[sd,l]; break; } }
-    if(!best){ // 가장 덜 겹치는 자리
-      let m=1e18; for(const sd of order) for(let l=0;l<LANES;l++) if(ends[sd][l]<m){m=ends[sd][l]; best=[sd,l];} }
-    [G.side,G.lane]=best; ends[G.side][G.lane]=G.cx+G.w/2;
-  });
-
-  let stems="";
-  groups.forEach(G=>{
-    const e=G.items[0], col=color(e.f), past=dayOf(e.e||e.d)<today, op=past?.38:1;
-    const cx=G.cx, up=G.side==="up", extra=(G.names.length-1)*16;
-    const off = 30 + G.lane*48 + (up?extra:0);
-    const ty = up ? Y-off : Y+off;
-    let mark="";
-    G.items.forEach((it,j)=>{ const c=color(it.f);
-      if(it.e){ const x2=x(dayOf(it.e)), h=it.k==="event"?8:4;
-        mark+=`<rect x="${cx}" y="${Y-h/2}" width="${Math.max(x2-cx,6)}" height="${h}" rx="${h/2}" fill="${c}" opacity="${it.k==='event'?.9:.55}"/>`;
-      } else if(it.k==="deadline"){
-        mark+=`<circle class="dot" cx="${cx}" cy="${Y}" r="${8.5-j*2.5}" fill="${c}" stroke="${css("--bg")}" stroke-width="2.5"/>`;
-      } else {
-        mark+=`<circle class="dot" cx="${cx}" cy="${Y}" r="7" fill="${css("--bg")}" stroke="${c}" stroke-width="2.5"/>`;
-      }});
-    const yDate = up ? ty : ty+12;
-    const stem=`<line x1="${cx}" y1="${up?Y-11:Y+11}" x2="${cx}" y2="${up?yDate+5:yDate-17}" stroke="${css("--line")}" stroke-width="1"/>`;
-    const dateTxt=`<text class="lbl-date" x="${cx}" y="${yDate}" text-anchor="middle" fill="${col}">${G.date}<tspan class="lbl-dd" dx="6">${G.dd}</tspan></text>`;
-    const names=G.names.map((t,j)=>{ const yy = up ? yDate-20-(G.names.length-1-j)*16 : yDate+18+j*16;
-      return `<text class="lbl-name" x="${cx}" y="${yy}" text-anchor="middle">${t}</text>`; }).join("");
-    g += `<g class="ev" tabindex="0" data-i="${EVENTS.indexOf(e)}" data-n="${G.items.map(i=>EVENTS.indexOf(i)).join(",")}" opacity="${op}" role="button"
-            aria-label="${G.names.join(", ")} ${G.date} ${G.dd}">${mark}${dateTxt}${names}</g>`;
-    stems += `<g opacity="${op}">${stem}</g>`;
-  });
-  svg.innerHTML = g.replace('<!--STEMS-->', stems);
-
-  // 처음엔 오늘이 왼쪽 1/5 지점에 오도록
-  scroller.scrollLeft = Math.max(0, xt - scroller.clientWidth*0.2);
-  bindTips(today);
 }
 
 function axis(start,end,x,Y,H,top){
@@ -427,9 +340,7 @@ function render(){
   const isList=state.view==="list";
   list.hidden=!isList; sc.hidden=isList;
   document.querySelector(".legend").style.visibility = isList ? "hidden" : "visible";
-  if(state.view==="lanes") renderLanes(today);
-  else if(isList) renderList(today);
-  else renderLine(today);
+  if(isList) renderList(today); else renderLanes(today);
 }
 
 function bindTips(today){
@@ -465,7 +376,7 @@ function seg(id,key,cast){
     render();
   }));
 }
-try{ const s=JSON.parse(localStorage.getItem("pacl-tl2")||"null"); if(s){ Object.assign(state,s);
+try{ const s=JSON.parse(localStorage.getItem("pacl-tl2")||"null"); if(s){ Object.assign(state,s); if(state.view!=="list") state.view="lanes";
   document.querySelectorAll("#fField button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.v===state.field));
   document.querySelectorAll("#fRange button").forEach(b=>b.setAttribute("aria-pressed", +b.dataset.v===state.months));
   document.querySelectorAll("#fView button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.v===state.view)); } }catch(_){}
