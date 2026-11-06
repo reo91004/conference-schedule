@@ -1,0 +1,13 @@
+{
+  "source": "https://raw.githubusercontent.com/ccfddl/ccf-deadlines/main/conference/",
+  "conferences": [
+    { "path": "SC/crypto.yml",    "field": "security" },
+    { "path": "SC/eurocrypt.yml", "field": "security" },
+    { "path": "SC/asiacrypt.yml", "field": "security" },
+    { "path": "SC/ches.yml",      "field": "security", "label": "TCHES" },
+    { "path": "AI/icml.yml",      "field": "ai" },
+    { "path": "AI/iclr.yml",      "field": "ai" },
+    { "path": "AI/cvpr.yml",      "field": "ai" },
+    { "path": "AI/nips.yml",      "field": "ai" }
+  ]
+}

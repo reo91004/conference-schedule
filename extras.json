@@ -1,0 +1,24 @@
+{
+  "_설명": "ccfddl에 없는 일정만 여기에 적습니다. time은 해당 timezone 기준, 시각을 모르면 날짜만 적습니다.",
+  "events": [
+    {
+      "conf": "삼성휴먼테크",
+      "label": "본 논문 마감",
+      "kind": "deadline",
+      "field": "etc",
+      "time": "2026-11-24",
+      "tz": "KST",
+      "note": "마감 시각 미공지",
+      "link": "https://dmse.inha.ac.kr/bbs/dmse/535/191458/artclView.do"
+    },
+    {
+      "conf": "CVPR 2027",
+      "label": "Supplementary 마감",
+      "kind": "deadline",
+      "field": "ai",
+      "time": "2026-11-23 23:59:59",
+      "tz": "AoE",
+      "link": "https://cvpr.thecvf.com/Conferences/2027/Dates"
+    }
+  ]
+}
