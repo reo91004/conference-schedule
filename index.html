@@ -39,7 +39,7 @@ html,body{margin:0;background:var(--bg);color:var(--fg);
 .seg button{all:unset;cursor:pointer;font-size:12px;padding:5px 10px;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--fg);font-weight:600}
 .seg button:focus-visible{outline:2px solid var(--crypto);outline-offset:-2px}
-.scroller{overflow-x:auto;overflow-y:hidden;margin:0 -16px;padding:0 16px;scrollbar-width:thin}
+.scroller{overflow:hidden}
 svg{display:block}
 .lbl-name{font-size:13px;fill:var(--muted)}
 .lbl-name,.lbl-date{paint-order:stroke;stroke:var(--bg);stroke-width:5px;stroke-linejoin:round}
@@ -61,7 +61,7 @@ svg{display:block}
 .tba b{color:var(--fg);font-weight:500}
 .src{color:var(--faint);text-decoration:none;margin-left:8px}
 .src:hover{color:var(--muted)}
-.list{margin-top:8px;border-top:1px solid var(--line)}
+.list{margin-top:8px;border-top:1px solid var(--line);overflow-y:auto}
 .row{display:grid;grid-template-columns:78px 1fr auto;gap:14px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--line);cursor:pointer}
 .row:hover{background:var(--card)}
 .row .dd{font-size:20px;font-weight:650;letter-spacing:-.03em}
@@ -89,6 +89,11 @@ body{word-break:keep-all}
 .lane-lbl{font-size:11px;fill:var(--muted)}
 .lane-date{font-size:12px;font-weight:600}
 .lane-lbl,.lane-date{paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round}
+@media (max-height:460px){
+  .wrap{padding-top:10px;padding-bottom:6px}
+  .next .dd{font-size:22px}
+  .next .nm{margin-top:3px;font-size:12px}
+}
 .loading{font-size:13px;color:var(--muted);padding:40px 0}
 </style>
 </head>
@@ -266,7 +271,7 @@ function axis(start,end,x,Y,H,top){
 }
 const SHORT = {"Abstract 마감":"Abstract","논문 마감":"논문","Rebuttal":"Rebuttal","Notification":"Notification","개최":"개최"};
 
-function renderLanes(today){
+function renderLanes(today, rhCap){
   const svg=document.getElementById("tl"), scroller=document.getElementById("scroller");
   const start=today-10*DAY, end=today+state.months*30.4*DAY;
   const evs=visible().filter(e=>dayOf(e.e||e.d)>=start && dayOf(e.d)<=end);
@@ -275,8 +280,11 @@ function renderLanes(today){
     const next=items.find(e=>dayOf(e.e||e.d)>=today)||items[items.length-1];
     return {g, items, key:dayOf(next.d), f:items[0].f, place:(items.find(i=>i.place)||{}).place};
   }).sort((a,b)=>a.key-b.key);
-  const LW=150, RH=54, TOP=34, ppm={3:300,6:200,12:120}[state.months]||200;
-  const W=Math.max(scroller.clientWidth, LW+state.months*ppm), H=TOP+rows.length*RH+28;
+  // 임베드 프레임 안에 전부 들어오도록: 가로는 폭에 맞추고, 세로는 남은 높이를 학회 수로 나눔
+  const W=scroller.clientWidth, LW=W<560?104:150, TOP=34;
+  const used=document.querySelector(".top").offsetHeight+document.querySelector(".foot").offsetHeight+44;
+  const RH=Math.max(30, Math.min(rhCap||54, 54, Math.floor((innerHeight-used-TOP-28)/Math.max(rows.length,1))));
+  const H=TOP+rows.length*RH+28;
   const x=t=>LW+16+(t-start)/(end-start)*(W-LW-40);
   svg.setAttribute("width",W); svg.setAttribute("height",H); svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
   let g=axis(start,end,x,0,H,TOP-10);
@@ -286,28 +294,33 @@ function renderLanes(today){
   rows.forEach((r,i)=>{
     const y=TOP+i*RH+RH/2, col=color(r.f);
     if(i%2===0) g+=`<rect x="0" y="${TOP+i*RH}" width="${W}" height="${RH}" fill="${css("--card")}" opacity=".55"/>`;
-    g+=`<text class="lane-name" x="12" y="${y-2}">${r.g}</text>`;
-    if(r.place) g+=`<text class="lane-sub" x="12" y="${y+14}">${(p=>p.length>=3?p.slice(-3,-1).join(", "):p.join(", "))(r.place.split(",").map(t=>t.trim().replace(/\s*\(.*\)$/,"")))}</text>`;
+    g+=`<text class="lane-name" x="12" y="${RH<44?y+4:y-2}">${r.g}</text>`;
+    if(r.place && RH>=44) g+=`<text class="lane-sub" x="12" y="${y+14}">${(p=>p.length>=3?p.slice(-3,-1).join(", "):p.join(", "))(r.place.split(",").map(t=>t.trim().replace(/\s*\(.*\)$/,"")))}</text>`;
     const xs=r.items.map(e=>x(dayOf(e.d))), xe=r.items.map(e=>x(dayOf(e.e||e.d)));
     g+=`<line x1="${Math.min(...xs)}" y1="${y}" x2="${Math.max(...xe)}" y2="${y}" stroke="${col}" stroke-opacity=".35" stroke-width="2"/>`;
     const xsAll=r.items.map(e=>x(dayOf(e.d)));
     r.items.forEach((e,j)=>{
       const cx=xsAll[j], past=dayOf(e.e||e.d)<today, op=past?.38:1;
-      const crowded=(j>0 && cx-xsAll[j-1]<62)||(j<xsAll.length-1 && xsAll[j+1]-cx<62);
+      const gap = RH<44 ? 40 : 62;
+      const crowded=(j>0 && cx-xsAll[j-1]<gap)||(j<xsAll.length-1 && xsAll[j+1]-cx<gap);
       let mark="";
       if(e.e){ const x2=x(dayOf(e.e)); mark=`<rect x="${cx}" y="${y-5}" width="${Math.max(x2-cx,6)}" height="10" rx="5" fill="${col}"/>`; }
       else if(e.k==="deadline") mark=`<circle class="dot" cx="${cx}" cy="${y}" r="7" fill="${col}" stroke="${css("--bg")}" stroke-width="2"/>`;
       else mark=`<circle class="dot" cx="${cx}" cy="${y}" r="5.5" fill="${css("--bg")}" stroke="${col}" stroke-width="2.2"/>`;
-      const above = !crowded || j%2===0;
-      const lbl=`<text class="lane-date" x="${cx}" y="${above?y-11:y+22}" text-anchor="middle" fill="${col}">${fmt(e.d)}</text>`
-        + (crowded ? "" : `<text class="lane-lbl" x="${cx}" y="${y+21}" text-anchor="middle">${SHORT[e.s]||e.s.replace(" 마감","")}</text>`);
+      const compact = RH<44;
+      const above = compact || !crowded || j%2===0;
+      const showDate = !compact || !crowded || j%2===0;
+      const lbl=(showDate?`<text class="lane-date" x="${cx}" y="${above?y-10:y+22}" text-anchor="middle" fill="${col}">${fmt(e.d)}</text>`:"")
+        + (crowded || compact ? "" : `<text class="lane-lbl" x="${cx}" y="${y+21}" text-anchor="middle">${SHORT[e.s]||e.s.replace(" 마감","")}</text>`);
       g+=`<g class="ev" tabindex="0" data-i="${EVENTS.indexOf(e)}" data-n="${EVENTS.indexOf(e)}" opacity="${op}" role="button" aria-label="${e.c} ${e.s} ${fmt(e.d)}">${mark}${lbl}</g>`;
     });
   });
   if(!rows.length) g+=`<text x="${W/2}" y="${TOP+30}" text-anchor="middle" class="lane-lbl">이 기간에는 일정이 없습니다</text>`;
   svg.innerHTML=g;
-  scroller.scrollLeft=Math.max(0, xt-LW-scroller.clientWidth*0.15);
   bindTips(today);
+  // 실제로 넘치면 줄 높이를 줄여 한 번 더
+  const over=document.documentElement.scrollHeight-innerHeight;
+  if(over>0 && RH>30 && !rhCap) renderLanes(today, Math.max(30, RH-Math.ceil(over/Math.max(rows.length,1))-1));
 }
 
 function renderList(today){
@@ -337,10 +350,13 @@ function render(){
   const today=kstToday();
   renderNext(today);
   const list=document.getElementById("list"), sc=document.getElementById("scroller");
-  const isList=state.view==="list";
+  const isList=state.view==="list" || innerWidth<560;
+  document.getElementById("fView").hidden = innerWidth<560;
   list.hidden=!isList; sc.hidden=isList;
   document.querySelector(".legend").style.visibility = isList ? "hidden" : "visible";
-  if(isList) renderList(today); else renderLanes(today);
+  if(isList){ renderList(today);
+    list.style.maxHeight=Math.max(200, innerHeight-document.querySelector(".top").offsetHeight-document.querySelector(".foot").offsetHeight-44)+"px"; }
+  else renderLanes(today);
 }
 
 function bindTips(today){
